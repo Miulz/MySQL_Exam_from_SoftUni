@@ -1,0 +1,203 @@
+---- Task 01
+
+
+create table continents(
+id int auto_increment primary key,
+name varchar(40) not null unique
+);
+
+create table countries(
+id int auto_increment primary key,
+name varchar(40) not null unique,
+country_code varchar(10) not null unique,
+continent_id int not null,
+foreign key(continent_id) references continents (id) 
+);
+
+
+create table preserves (
+id int auto_increment primary key,
+name varchar(255) not null unique,
+latitude decimal(9, 6),
+longitude decimal(9, 6),
+area int,
+type varchar(20),
+established_on date
+);
+
+
+create table positions(
+id int auto_increment primary key,
+name varchar(40) not null unique,
+description text,
+is_dangerous boolean not null
+);
+
+
+create table workers(
+id int auto_increment primary key,
+first_name varchar(40) not null,
+last_name varchar(40) not null,
+age int,
+personal_number varchar(20) not null unique,
+salary decimal(19, 2),
+is_armed boolean not null,
+start_date date,
+preserve_id int,
+position_id int,
+foreign key (preserve_id) references preserves (id),
+foreign key (position_id) references positions (id)
+);
+
+
+create table countries_preserves(
+country_id int,
+preserve_id int,
+foreign key (country_id) references countries (id),
+foreign key (preserve_id) references preserves (id)
+);
+
+
+---- Task 02
+
+
+insert into preserves (name, area, type) 
+select concat(ps.name, " ", 'is in South Hemisphere'),
+			  ps.area * ps.id,
+              lower(ps.type)
+              from preserves ps
+              where latitude < 0
+              ;
+ 
+
+
+---- Task 03
+
+UPDATE workers 
+SET 
+    salary = salary + 500
+WHERE
+    position_id = 5 OR position_id = 8 OR position_id = 11 OR position_id = 13;
+
+
+---- Shortcut
+
+select * from preserves;
+SET sql_safe_updates = 0;
+
+---- Task 04
+
+delete from preserves where established_on is null;
+
+---- Shortcut
+
+drop database exam;
+create database exam;
+use exam;
+
+select * from workers;
+
+
+---- Task 05
+
+select concat(first_name, " ", last_name) as full_name,
+timestampdiff(day, start_date, '2024-01-01') as days_of_experience
+from workers
+order by days_of_experience desc
+limit 10;
+
+---- Shortcut 
+
+select * from preserves;
+select * from countries;
+select * from workers;
+select * from countries_preserves;
+select * from continents;
+
+
+---- Task 06
+
+select ws.id, ws.first_name, ws.last_name, ps.name as preserve_name, cs.country_code from (workers ws, countries cs)
+join preserves ps 
+on ws.preserve_id = ps.id
+join countries_preserves cp
+on cs.id = cp.country_id and ps.id = cp.preserve_id
+where salary > 5000 and age < 50  
+order by country_code asc;
+
+
+---- Task 07
+
+select name, count(*) as armed_workers  from workers ws
+join preserves ps
+on ws.preserve_id = ps.id
+where is_armed > 0
+group by ps.name
+order by armed_workers desc, name asc
+;
+
+
+---- Task 08
+
+select ps.name, cs.country_code, year(established_on) as founded_on from (preserves ps, countries cs)
+join countries_preserves cp
+on cp.preserve_id = ps.id and cs.id = cp.country_id and ps.id = cp.preserve_id
+where established_on is not null and month(established_on) = 5 
+order by established_on asc
+limit 5;
+
+
+---- Task 09
+
+select id, name,
+case
+     when area <= 100 then "very small"
+     when area <= 1000 then "small"
+     when area <= 10000 then "medium"
+     when area <= 50000 then "large"
+     when area > 50000 then "very large"
+     end as category
+from preserves
+order by area desc;
+
+---- Task 10
+
+delimiter $
+
+create function udf_average_salary_by_position_name (position_name varchar(40)) returns decimal(10, 2)
+deterministic
+begin
+declare result decimal(10, 2);
+set result := (select avg(ws.salary) from positions p
+join workers ws
+on ws.position_id = p.id
+where p.name = position_name
+group by p.id
+ );
+return result;
+end$
+
+delimiter ;
+
+SELECT p.name, udf_average_salary_by_position_name('Forester') as position_average_salary FROM positions p 
+WHERE p.name = 'Forester';
+
+---- Task 11
+
+
+DELIMITER //
+
+create procedure udp_increase_salaries_by_country (country_name varchar(40))
+begin
+update workers ws
+join countries_preserves cp
+on ws.preserve_id = cp.country_id
+join countries cs
+on cp.country_id = cs.id
+set ws.salary = ws.salary * 1.05
+where cs.name = country_name;
+end //
+
+DELIMITER ; 
+
+CALL udp_increase_salaries_by_country ('Germany');
